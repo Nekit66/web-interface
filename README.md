@@ -19,9 +19,11 @@
 
 ## Один раз: включить GitHub Pages
 
-1. Репозиторий → **Settings** → **Pages**
-2. **Build and deployment** → Source: **GitHub Actions** (не «Deploy from branch»)
-3. После push в `main` сайт обновится автоматически
+**Вариант A (рекомендуется):** Settings → **Pages** → Source: **GitHub Actions** → дождитесь зелёной галочки workflow «Deploy GitHub Pages» во вкладке **Actions**.
+
+**Вариант B:** если открывается README, а не вход в систему: Settings → **Pages** → Source: **Deploy from branch** → Branch `main` → папка **`/project`** (не корень `/`).
+
+После настройки откройте: **https://nekit66.github.io/web-interface/** — должна быть **форма входа**, не текст README.
 
 ## Один раз: запустить API (Render, бесплатно)
 
