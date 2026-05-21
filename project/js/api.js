@@ -1,5 +1,10 @@
 var API = {
-    baseUrl: '',
+    baseUrl: (function() {
+        var host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') return '';
+        if (host.endsWith('github.io')) return 'https://is-ikd-api.onrender.com';
+        return '';
+    })(),
 
     getToken: function() {
         return localStorage.getItem('authToken');
@@ -15,7 +20,7 @@ var API = {
         if (body !== undefined) opts.body = JSON.stringify(body);
 
         return fetch(this.baseUrl + path, opts).then(function(res) {
-            return res.json().then(function(data) {
+            return res.json().catch(function() { return {}; }).then(function(data) {
                 if (!res.ok) {
                     var err = new Error(data.error || 'Ошибка запроса');
                     err.status = res.status;
@@ -23,6 +28,11 @@ var API = {
                 }
                 return data;
             });
+        }).catch(function(err) {
+            if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+                throw new Error('Сервер недоступен. Подождите 1–2 мин. (холодный старт) или запустите API локально.');
+            }
+            throw err;
         });
     },
 
