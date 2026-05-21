@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Новый проект | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><h1>ИС ИКД</h1><span>Industrial Systems</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2>Новый проект</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content">
+                <div id="notification"></div>
+                <div class="card" style="max-width:640px;">
+                    <h2 class="card-header">Создать новый проект</h2>
+                    <p style="font-size:13px;color:#666;margin-bottom:16px;">
+                        При создании проекта назначается <strong>Главный инженер проекта (ГИП)</strong> —
+                        ответственное лицо, принимающее решения по проекту и назначающее исполнителей на задания.
+                    </p>
+                    <form id="projectForm">
+                        <div class="form-group"><label>Шифр проекта *</label><input type="text" id="projCode" placeholder="Напр: 2026-ИКД-015" required></div>
+                        <div class="form-group"><label>Наименование *</label><input type="text" id="projTitle" placeholder="Полное наименование" required></div>
+                        <div class="form-group"><label>Тип объекта</label><select id="projType"><option value="">Выберите...</option><option>ТЭЦ</option><option>Котельная</option><option>Насосная станция</option><option>ЛЭП</option><option>Подстанция</option></select></div>
+                        <div class="form-group"><label>Заказчик *</label><input type="text" id="projClient" placeholder="Организация" required></div>
+                        <div class="form-group"><label>Срок сдачи *</label><input type="date" id="projDeadline" required></div>
+                        <div class="form-group">
+                            <label>Главный инженер проекта (ГИП) *</label>
+                            <select id="projGip" required>
+                                <option value="">Загрузка списка ГИП...</option>
+                            </select>
+                            <small style="color:#888;font-size:12px;">Лицо, ответственное за проект и распределение заданий по отделам</small>
+                        </div>
+                        <div class="form-group"><label>Описание</label><textarea id="projDesc" rows="3" placeholder="Краткое описание..."></textarea></div>
+                        <div class="modal-actions">
+                            <a href="projects.html" class="btn btn-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('projects.html');
+
+        if (!Auth.checkAccessByCode(['chief_engineer', 'tech_dept_head'])) {
+            window.location.href = 'projects.html';
+        }
+
+        API.getEmployees({ gipOnly: '1' }).then(function(gips) {
+            var sel = document.getElementById('projGip');
+            if (gips.length === 0) {
+                sel.innerHTML = '<option value="">Нет зарегистрированных ГИП</option>';
+                return;
+            }
+            sel.innerHTML = '<option value="">Выберите ГИП...</option>' +
+                gips.map(function(g) {
+                    return '<option value="' + g.id + '">' + g.fullName + ' (' + g.login + ')</option>';
+                }).join('');
+        }).catch(function(err) {
+            UI.showError(err.message);
+        });
+
+        document.getElementById('projectForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            var gipId = document.getElementById('projGip').value;
+            if (!gipId) {
+                alert('Выберите ГИП — ответственного за проект');
+                return;
+            }
+
+            API.createProject({
+                code: document.getElementById('projCode').value.trim(),
+                title: document.getElementById('projTitle').value.trim(),
+                description: document.getElementById('projDesc').value.trim(),
+                type: document.getElementById('projType').value,
+                client: document.getElementById('projClient').value.trim(),
+                deadline: document.getElementById('projDeadline').value,
+                gipId: Number(gipId)
+            }).then(function() {
+                UI.showNotification('Проект создан! Перенаправление...');
+                setTimeout(function() { window.location.href = 'projects.html'; }, 1500);
+            }).catch(function(err) {
+                UI.showError(err.message);
+            });
+        });
+    </script>
+</body>
+</html>

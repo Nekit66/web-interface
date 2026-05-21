@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проект | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><h1>ИС ИКД</h1><span>Industrial Systems</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-new-project" id="newProjectBtn" onclick="window.location.href='create-project.html'">+ Новый проект</button>
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2 id="headerTitle">Проект</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content" id="projectContent"></div>
+        </main>
+    </div>
+
+    <div class="modal" id="taskModal">
+        <div class="modal-box">
+            <h3>Выдать задание</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">ГИП назначает отдел и инженера-проектировщика — ответственного исполнителя.</p>
+            <div class="form-group">
+                <label>Производственный отдел *</label>
+                <select id="taskDept"></select>
+            </div>
+            <div class="form-group">
+                <label>Содержание задания *</label>
+                <textarea id="taskTitleInput" rows="3" placeholder="Опишите задание..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Срок исполнения</label>
+                <input type="date" id="taskDeadline">
+            </div>
+            <div class="form-group">
+                <label>Инженер-проектировщик (исполнитель)</label>
+                <select id="taskAssignee">
+                    <option value="">Сначала выберите отдел...</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="UI.closeModal('taskModal')">Отмена</button>
+                <button class="btn btn-primary" id="submitTaskBtn">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="assignModal">
+        <div class="modal-box">
+            <h3>Назначить исполнителя</h3>
+            <input type="hidden" id="assignTaskId">
+            <div class="form-group">
+                <label>Отдел</label>
+                <select id="assignDept"></select>
+            </div>
+            <div class="form-group">
+                <label>Инженер-проектировщик</label>
+                <select id="assignEmployee"></select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="UI.closeModal('assignModal')">Отмена</button>
+                <button class="btn btn-primary" id="submitAssignBtn">Назначить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="commentModal">
+        <div class="modal-box">
+            <h3>Добавить замечание</h3>
+            <div class="form-group"><label>Документ</label><select id="commentDoc"></select></div>
+            <div class="form-group"><label>Текст</label><textarea id="commentText" rows="3" placeholder="Опишите замечание..."></textarea></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="UI.closeModal('commentModal')">Отмена</button>
+                <button class="btn btn-primary" id="submitCommentBtn">Добавить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('projects.html');
+
+        var projectId = new URLSearchParams(window.location.search).get('id');
+        var project = null;
+        var tasks = [];
+        var docs = [];
+        var departments = [];
+        var canIssue = false;
+
+        function loadDesignersForDept(deptId, targetSelect, selectedId) {
+            if (!deptId) {
+                targetSelect.innerHTML = '<option value="">Сначала выберите отдел...</option>';
+                return Promise.resolve();
+            }
+            return API.getEmployees({ designersOnly: '1', departmentId: deptId }).then(function(list) {
+                targetSelect.innerHTML = '<option value="">Не назначен</option>' +
+                    list.map(function(e) {
+                        var sel = selectedId && e.id === selectedId ? ' selected' : '';
+                        return '<option value="' + e.id + '"' + sel + '>' + e.fullName + '</option>';
+                    }).join('');
+            });
+        }
+
+        function initTaskModal() {
+            var deptSel = document.getElementById('taskDept');
+            deptSel.innerHTML = departments.map(function(d) {
+                return '<option value="' + d.id + '">' + d.name + '</option>';
+            }).join('');
+
+            deptSel.addEventListener('change', function() {
+                loadDesignersForDept(this.value, document.getElementById('taskAssignee'));
+            });
+
+            if (departments.length > 0) {
+                loadDesignersForDept(departments[0].id, document.getElementById('taskAssignee'));
+            }
+        }
+
+        function initAssignModal() {
+            var deptSel = document.getElementById('assignDept');
+            deptSel.innerHTML = departments.map(function(d) {
+                return '<option value="' + d.id + '">' + d.name + '</option>';
+            }).join('');
+
+            deptSel.addEventListener('change', function() {
+                loadDesignersForDept(this.value, document.getElementById('assignEmployee'));
+            });
+        }
+
+        window.openAssignModal = function(taskId, deptId, assigneeId) {
+            document.getElementById('assignTaskId').value = taskId;
+            var deptSel = document.getElementById('assignDept');
+            if (deptId) deptSel.value = deptId;
+            loadDesignersForDept(deptSel.value, document.getElementById('assignEmployee'), assigneeId).then(function() {
+                UI.openModal('assignModal');
+            });
+        };
+
+        function renderProject() {
+            var user = Auth.getCurrentUser();
+            var isChief = Auth.checkAccessByCode(['chief_engineer']);
+            canIssue = (
+                Auth.checkAccessByCode(['chief_engineer', 'tech_dept_head']) ||
+                (user.roleCode === 'project_chief' && project.gipId === user.id)
+            );
+
+            var html = '';
+
+            html += '<div class="card">';
+            html += '<div class="flex-between mb-4">';
+            html += '<div>';
+            html += '<h2 style="font-size:20px;margin-bottom:4px;">' + project.code + ' — ' + project.title + '</h2>';
+            html += '<p style="color:#888;">' + (project.description || '') + '</p>';
+            html += '<p style="font-size:13px;margin-top:8px;">Заказчик: <strong>' + project.client + '</strong> | Срок: <strong>' + project.deadline + '</strong></p>';
+            html += '<p style="font-size:13px;margin-top:6px;">ГИП (ответственный за проект): <strong>' + project.gipName + '</strong></p>';
+            html += '</div>';
+            html += '<div>' + UI.getStatusBadge(project.status) + '</div>';
+            html += '</div>';
+            html += '<div style="margin-top:12px;">';
+            html += '<span style="font-size:13px;">Прогресс: ' + project.progress + '%</span>';
+            html += '<div style="background:#e5e7eb;border-radius:4px;height:6px;margin-top:4px;">';
+            html += '<div style="background:#0a1628;height:6px;border-radius:4px;width:' + project.progress + '%;"></div>';
+            html += '</div></div>';
+            html += '</div>';
+
+            html += '<div class="card">';
+            html += '<div class="tabs">';
+            html += '<button class="tab-btn active" id="tabTasksBtn" type="button">Задания</button>';
+            html += '<button class="tab-btn" id="tabDocsBtn" type="button">Документация и замечания</button>';
+            html += '</div>';
+
+            html += '<div class="tab-panel active" id="tabTasks">';
+            if (canIssue) {
+                html += '<button class="btn btn-primary mb-4" id="openTaskModalBtn" type="button">+ Выдать задание</button>';
+            }
+            html += '<table><thead><tr><th>Шифр</th><th>Задача</th><th>Отдел</th><th>Исполнитель</th><th>Срок</th><th>Статус</th>';
+            if (canIssue) html += '<th>Назначение</th>';
+            html += '</tr></thead><tbody>';
+
+            tasks.forEach(function(t) {
+                html += '<tr>';
+                html += '<td class="text-mono" style="font-weight:600;color:#0a1628;">' + t.code + '</td>';
+                html += '<td>' + t.title + '</td>';
+                html += '<td>' + (t.departmentName || '—') + '</td>';
+                html += '<td>' + t.assigneeName + '</td>';
+                html += '<td>' + (t.deadline || '—') + '</td>';
+                html += '<td>' + UI.getStatusBadge(t.status) + '</td>';
+                if (canIssue) {
+                    html += '<td><button class="btn btn-xs btn-secondary" onclick="openAssignModal(' + t.id + ',' + (t.departmentId || 'null') + ',' + (t.assigneeId || 'null') + ')">Назначить</button></td>';
+                }
+                html += '</tr>';
+            });
+
+            if (tasks.length === 0) {
+                html += '<tr><td colspan="' + (canIssue ? 7 : 6) + '" style="text-align:center;color:#888;padding:20px;">Нет заданий</td></tr>';
+            }
+            html += '</tbody></table></div>';
+
+            html += '<div class="tab-panel" id="tabDocs">';
+            html += '<div style="margin-bottom:12px;">';
+            html += '<button class="btn btn-secondary" id="openCommentModalBtn" type="button">+ Добавить замечание</button>';
+            if (isChief) {
+                html += ' <button class="btn btn-success" id="approveAllBtn" type="button">Утвердить комплект</button>';
+            }
+            html += '</div>';
+
+            docs.forEach(function(d) {
+                html += '<div style="border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px;">';
+                html += '<div class="flex-between"><div><strong>' + d.name + '</strong><br><small style="color:#888;">' + d.version + ' • ' + d.size + '</small></div><div>' + UI.getStatusBadge(d.status) + '</div></div>';
+                html += '<div style="margin-top:8px;"><strong style="font-size:11px;color:#888;">Замечания (' + d.comments.length + ')</strong></div>';
+                if (d.comments.length === 0) {
+                    html += '<p style="color:#888;font-size:12px;margin-top:4px;">Замечаний нет</p>';
+                } else {
+                    d.comments.forEach(function(c) {
+                        html += '<div style="border-left:3px solid #0a1628;padding:4px 12px;margin:6px 0;font-size:13px;"><strong>' + c.author + '</strong> <span style="color:#888;font-size:11px;">' + c.date + '</span><br>' + c.text + '</div>';
+                    });
+                }
+                html += '</div>';
+            });
+            if (docs.length === 0) html += '<p style="color:#888;">Нет документов</p>';
+            html += '</div></div>';
+
+            document.getElementById('projectContent').innerHTML = html;
+            document.getElementById('headerTitle').textContent = project.code + ' — ' + project.title;
+
+            document.getElementById('tabTasksBtn').addEventListener('click', function() {
+                document.getElementById('tabTasksBtn').classList.add('active');
+                document.getElementById('tabDocsBtn').classList.remove('active');
+                document.getElementById('tabTasks').classList.add('active');
+                document.getElementById('tabDocs').classList.remove('active');
+            });
+            document.getElementById('tabDocsBtn').addEventListener('click', function() {
+                document.getElementById('tabDocsBtn').classList.add('active');
+                document.getElementById('tabTasksBtn').classList.remove('active');
+                document.getElementById('tabDocs').classList.add('active');
+                document.getElementById('tabTasks').classList.remove('active');
+            });
+
+            var openTaskBtn = document.getElementById('openTaskModalBtn');
+            if (openTaskBtn) openTaskBtn.addEventListener('click', function() { UI.openModal('taskModal'); });
+
+            var openCommentBtn = document.getElementById('openCommentModalBtn');
+            if (openCommentBtn) openCommentBtn.addEventListener('click', openCommentModal);
+
+            var approveBtn = document.getElementById('approveAllBtn');
+            if (approveBtn) approveBtn.addEventListener('click', approveAll);
+        }
+
+        function reload() {
+            return Promise.all([
+                API.getProject(projectId),
+                API.getTasks({ projectId: projectId }),
+                API.getDocuments(projectId),
+                API.getDepartments()
+            ]).then(function(results) {
+                project = results[0];
+                tasks = results[1];
+                docs = results[2];
+                departments = results[3];
+                renderProject();
+            });
+        }
+
+        document.getElementById('submitTaskBtn').addEventListener('click', function() {
+            var title = document.getElementById('taskTitleInput').value.trim();
+            var deptId = document.getElementById('taskDept').value;
+            if (!title || !deptId) { alert('Укажите содержание и отдел'); return; }
+
+            API.createTask({
+                projectId: Number(projectId),
+                title: title,
+                departmentId: Number(deptId),
+                assigneeId: document.getElementById('taskAssignee').value ? Number(document.getElementById('taskAssignee').value) : null,
+                deadline: document.getElementById('taskDeadline').value || null
+            }).then(function() {
+                UI.closeModal('taskModal');
+                document.getElementById('taskTitleInput').value = '';
+                document.getElementById('taskDeadline').value = '';
+                return reload();
+            }).catch(function(err) { UI.showError(err.message); });
+        });
+
+        document.getElementById('submitAssignBtn').addEventListener('click', function() {
+            var taskId = document.getElementById('assignTaskId').value;
+            var assigneeId = document.getElementById('assignEmployee').value;
+            var departmentId = document.getElementById('assignDept').value;
+            if (!assigneeId) { alert('Выберите исполнителя'); return; }
+
+            API.assignTask(taskId, {
+                assigneeId: Number(assigneeId),
+                departmentId: Number(departmentId)
+            }).then(function() {
+                UI.closeModal('assignModal');
+                UI.showNotification('Исполнитель назначен');
+                return reload();
+            }).catch(function(err) { UI.showError(err.message); });
+        });
+
+        document.getElementById('submitCommentBtn').addEventListener('click', function() {
+            var docId = document.getElementById('commentDoc').value;
+            var text = document.getElementById('commentText').value.trim();
+            if (!text) { alert('Введите текст замечания'); return; }
+
+            API.addComment(docId, text).then(function() {
+                UI.closeModal('commentModal');
+                document.getElementById('commentText').value = '';
+                return reload();
+            }).catch(function(err) { UI.showError(err.message); });
+        });
+
+        function openCommentModal() {
+            if (docs.length === 0) { alert('Нет документов для добавления замечаний'); return; }
+            document.getElementById('commentDoc').innerHTML = docs.map(function(d) {
+                return '<option value="' + d.id + '">' + d.name + '</option>';
+            }).join('');
+            document.getElementById('commentText').value = '';
+            UI.openModal('commentModal');
+        }
+
+        function approveAll() {
+            API.approveProjectDocs(projectId).then(function() {
+                UI.showNotification('Комплект утверждён');
+                return reload();
+            }).catch(function(err) { UI.showError(err.message); });
+        }
+
+        if (!projectId) {
+            document.getElementById('projectContent').innerHTML =
+                '<div class="card"><h2>Проект не указан</h2></div>';
+        } else {
+            reload().then(function() {
+                initTaskModal();
+                initAssignModal();
+            }).catch(function(err) {
+                document.getElementById('projectContent').innerHTML =
+                    '<div class="card"><h2>Ошибка загрузки</h2><p>' + err.message + '</p>' +
+                    '<a href="projects.html" class="btn btn-primary" style="margin-top:12px;">К списку</a></div>';
+            });
+        }
+    </script>
+</body>
+</html>

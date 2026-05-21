@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проекты | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><h1>ИС ИКД</h1><span>Industrial Systems</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-new-project" id="newProjectBtn" onclick="window.location.href='create-project.html'">+ Новый проект</button>
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2>Проекты</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content">
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Шифр</th>
+                                <th>Наименование</th>
+                                <th>ГИП</th>
+                                <th>Заказчик</th>
+                                <th>Срок</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('projects.html');
+
+        API.getProjects().then(function(projects) {
+            document.getElementById('projectsTable').innerHTML = projects.map(function(p) {
+                return '<tr onclick="window.location.href=\'project-detail.html?id=' + p.id + '\'">' +
+                    '<td class="text-mono" style="font-weight:600;color:#0a1628;">' + p.code + '</td>' +
+                    '<td><strong>' + p.title + '</strong><br><small style="color:#888;">' + (p.description || '') + '</small></td>' +
+                    '<td><span class="badge badge-blue" style="text-transform:none;">' + p.gipName + '</span></td>' +
+                    '<td>' + p.client + '</td>' +
+                    '<td>' + p.deadline + '</td>' +
+                    '<td>' + UI.getStatusBadge(p.status) + '</td>' +
+                    '</tr>';
+            }).join('');
+        }).catch(function(err) {
+            UI.showError(err.message);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дашборд | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <h1>ИС ИКД</h1>
+                <span>Industrial Systems</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-new-project" id="newProjectBtn" onclick="window.location.href='create-project.html'">+ Новый проект</button>
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2>Панель управления</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statProjects">0</div>
+                        <div class="stat-label">Активных проектов</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTasks">0</div>
+                        <div class="stat-label">Заданий в работе</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:#dc2626;" id="statReview">0</div>
+                        <div class="stat-label">Ожидают проверки</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Текущие объекты</div>
+                    <div id="projectList"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Активные задания</div>
+                    <div id="activeTasks"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('dashboard.html');
+
+        Promise.all([
+            API.getStats(),
+            API.getProjects(),
+            API.getTasks({ status: 'В работе' })
+        ]).then(function(results) {
+            var stats = results[0];
+            var projects = results[1];
+            var tasks = results[2];
+
+            document.getElementById('statProjects').textContent = stats.activeProjects;
+            document.getElementById('statTasks').textContent = stats.tasksInProgress;
+            document.getElementById('statReview').textContent = stats.pendingReview;
+
+            document.getElementById('projectList').innerHTML = projects.map(function(p) {
+                return '<div style="margin-bottom:12px;">' +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+                    '<span style="font-size:14px;font-weight:500;">' + p.code + ' — ' + p.title + ' <small style="color:#888;">(ГИП: ' + p.gipName + ')</small></span>' +
+                    '<span style="font-size:13px;font-weight:600;">' + p.progress + '%</span>' +
+                    '</div>' +
+                    '<div style="background:#e5e7eb;border-radius:4px;height:6px;">' +
+                    '<div style="background:#0a1628;height:6px;border-radius:4px;width:' + p.progress + '%;"></div>' +
+                    '</div></div>';
+            }).join('') || '<p style="color:#888;">Нет проектов</p>';
+
+            var tasksDiv = document.getElementById('activeTasks');
+            if (tasks.length === 0) {
+                tasksDiv.innerHTML = '<p style="color:#888;font-size:13px;">Нет активных заданий</p>';
+            } else {
+                tasksDiv.innerHTML = '<table><thead><tr><th>Задача</th><th>Исполнитель</th><th>Срок</th></tr></thead><tbody>' +
+                    tasks.map(function(t) {
+                        return '<tr><td>' + t.title + '</td><td>' + t.assigneeName + '</td><td>' + (t.deadline || '—') + '</td></tr>';
+                    }).join('') + '</tbody></table>';
+            }
+        }).catch(function(err) {
+            UI.showError(err.message);
+        });
+    </script>
+</body>
+</html>

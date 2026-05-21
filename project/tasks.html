@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Задачи | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><h1>ИС ИКД</h1><span>Industrial Systems</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-new-project" id="newProjectBtn" onclick="window.location.href='create-project.html'">+ Новый проект</button>
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2>Все задачи</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content">
+                <div class="stats-grid-4">
+                    <div class="stat-card"><div class="stat-value" id="statAll">0</div><div class="stat-label">Всего</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#2563eb;" id="statWork">0</div><div class="stat-label">В работе</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#ea580c;" id="statCheck">0</div><div class="stat-label">На проверке</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#dc2626;" id="statOver">0</div><div class="stat-label">Просрочено</div></div>
+                </div>
+
+                <div class="card">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+                        <span style="font-size:12px;font-weight:600;color:#666;">Фильтр:</span>
+                        <button class="filter-btn active" data-filter="all">Все</button>
+                        <button class="filter-btn" data-filter="В работе">В работе</button>
+                        <button class="filter-btn" data-filter="Просрочено">Просрочено</button>
+                        <button class="filter-btn" data-filter="Выполнено">Выполнено</button>
+                        <div style="flex:1;"></div>
+                        <select id="projectFilter" style="padding:5px 10px;border:1px solid #d0d0d0;border-radius:4px;font-size:12px;">
+                            <option value="all">Все проекты</option>
+                        </select>
+                    </div>
+
+                    <table>
+                        <thead><tr><th>Шифр</th><th>Задача</th><th>Проект</th><th>Отдел</th><th>Исполнитель</th><th>Срок</th><th>Статус</th><th>Действия</th></tr></thead>
+                        <tbody id="tasksTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('tasks.html');
+
+        var currentFilter = 'all';
+        var currentProject = 'all';
+        var allTasks = [];
+        var projectsMap = {};
+
+        API.getProjects().then(function(projects) {
+            var sel = document.getElementById('projectFilter');
+            projects.forEach(function(p) {
+                projectsMap[p.id] = p;
+                var opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.code;
+                sel.appendChild(opt);
+            });
+            return API.getTasks();
+        }).then(function(tasks) {
+            allTasks = tasks;
+            renderTasks();
+        }).catch(function(err) {
+            UI.showError(err.message);
+        });
+
+        document.getElementById('projectFilter').addEventListener('change', function() {
+            currentProject = this.value;
+            renderTasks();
+        });
+
+        document.querySelectorAll('.filter-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                renderTasks();
+            });
+        });
+
+        function renderTasks() {
+            var tasks = allTasks.slice();
+
+            if (currentProject !== 'all') {
+                tasks = tasks.filter(function(t) { return String(t.projectId) === String(currentProject); });
+            }
+            if (currentFilter !== 'all') {
+                tasks = tasks.filter(function(t) { return t.status === currentFilter; });
+            }
+
+            document.getElementById('statAll').textContent = allTasks.length;
+            document.getElementById('statWork').textContent = allTasks.filter(function(t) { return t.status === 'В работе'; }).length;
+            document.getElementById('statCheck').textContent = allTasks.filter(function(t) { return t.status === 'На проверке'; }).length;
+            document.getElementById('statOver').textContent = allTasks.filter(function(t) { return t.status === 'Просрочено'; }).length;
+
+            var tbody = document.getElementById('tasksTable');
+            var user = Auth.getCurrentUser();
+            var canManage = Auth.checkAccessByCode(['chief_engineer', 'tech_dept_head', 'project_chief']);
+
+            if (tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:40px;">Нет задач</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = tasks.map(function(t) {
+                var proj = projectsMap[t.projectId];
+                var actions = '';
+                if (t.status !== 'Выполнено' && (canManage || (user && t.assigneeId === user.id))) {
+                    actions += '<button class="btn btn-xs btn-success" onclick="markDone(' + t.id + ')" title="Выполнено">✓</button> ';
+                }
+                if (canManage) {
+                    actions += '<button class="btn btn-xs btn-danger" onclick="deleteTask(' + t.id + ')" title="Удалить">✕</button>';
+                }
+                return '<tr>' +
+                    '<td class="text-mono" style="font-weight:600;color:#0a1628;">' + t.code + '</td>' +
+                    '<td>' + t.title + '</td>' +
+                    '<td>' + (proj ? '<a href="project-detail.html?id=' + proj.id + '" style="color:#0a1628;text-decoration:none;">' + proj.code + '</a>' : '—') + '</td>' +
+                    '<td>' + (t.departmentName || '—') + '</td>' +
+                    '<td>' + t.assigneeName + '</td>' +
+                    '<td>' + (t.deadline || '—') + '</td>' +
+                    '<td>' + UI.getStatusBadge(t.status) + '</td>' +
+                    '<td>' + actions + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        window.markDone = function(id) {
+            API.updateTaskStatus(id, 'Выполнено').then(function(updated) {
+                var idx = allTasks.findIndex(function(t) { return t.id === updated.id; });
+                if (idx >= 0) allTasks[idx] = updated;
+                renderTasks();
+            }).catch(function(err) { UI.showError(err.message); });
+        };
+
+        window.deleteTask = function(id) {
+            if (!confirm('Удалить эту задачу?')) return;
+            API.deleteTask(id).then(function() {
+                allTasks = allTasks.filter(function(t) { return t.id !== id; });
+                renderTasks();
+            }).catch(function(err) { UI.showError(err.message); });
+        };
+    </script>
+</body>
+</html>

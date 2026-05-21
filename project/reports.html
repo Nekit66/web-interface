@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчеты | ИС ИКД</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><h1>ИС ИКД</h1><span>Industrial Systems</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html">Панель управления</a>
+                <a href="projects.html">Проекты</a>
+                <a href="tasks.html">Задачи</a>
+                <a href="reports.html">Отчеты</a>
+                <a href="employees.html" id="employeesNav" style="display:none;">Сотрудники</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-new-project" id="newProjectBtn" onclick="window.location.href='create-project.html'">+ Новый проект</button>
+                <button class="btn-logout" onclick="UI.logout()">🚪 Выйти</button>
+            </div>
+        </aside>
+
+        <header class="header">
+            <h2>Отчеты</h2>
+            <div class="header-right">
+                <span id="userInfo"></span>
+                <button class="btn btn-sm btn-secondary" onclick="UI.logout()">Выйти</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="main-content">
+                <div class="stats-grid-4" id="summaryCards"></div>
+
+                <div class="card">
+                    <div class="card-header">Сводка по проектам</div>
+                    <table>
+                        <thead><tr><th>Шифр</th><th>Проект</th><th>Прогресс</th><th>Задач</th><th>Выполнено</th><th>Просрочено</th><th>Статус</th></tr></thead>
+                        <tbody id="reportTable"></tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">Загрузка отделов</div>
+                    <div id="deptLoad"></div>
+                </div>
+
+                <button class="btn btn-primary" id="exportBtn">📥 Экспорт CSV</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        UI.init('reports.html');
+
+        var projects = [];
+        var tasks = [];
+
+        Promise.all([API.getProjects(), API.getTasks()]).then(function(results) {
+            projects = results[0];
+            tasks = results[1];
+            renderReports();
+        }).catch(function(err) { UI.showError(err.message); });
+
+        function renderReports() {
+            var total = tasks.length;
+            var completed = tasks.filter(function(t) { return t.status === 'Выполнено'; }).length;
+            var overdue = tasks.filter(function(t) { return t.status === 'Просрочено'; }).length;
+
+            document.getElementById('summaryCards').innerHTML =
+                '<div class="stat-card"><div class="stat-value">' + total + '</div><div class="stat-label">Всего задач</div></div>' +
+                '<div class="stat-card"><div class="stat-value" style="color:#16a34a;">' + completed + '</div><div class="stat-label">Выполнено (' + (total > 0 ? Math.round(completed/total*100) : 0) + '%)</div></div>' +
+                '<div class="stat-card"><div class="stat-value" style="color:#dc2626;">' + overdue + '</div><div class="stat-label">Просрочено</div></div>' +
+                '<div class="stat-card"><div class="stat-value" style="color:#ea580c;">' + projects.length + '</div><div class="stat-label">Проектов в системе</div></div>';
+
+            document.getElementById('reportTable').innerHTML = projects.map(function(p) {
+                var pt = tasks.filter(function(t) { return t.projectId === p.id; });
+                var pc = pt.filter(function(t) { return t.status === 'Выполнено'; }).length;
+                var po = pt.filter(function(t) { return t.status === 'Просрочено'; }).length;
+                return '<tr>' +
+                    '<td class="text-mono" style="font-weight:600;color:#0a1628;">' + p.code + '</td>' +
+                    '<td>' + p.title + '</td>' +
+                    '<td><div style="display:flex;align-items:center;gap:8px;"><div style="background:#e5e7eb;width:80px;height:6px;border-radius:4px;"><div style="background:#0a1628;height:6px;border-radius:4px;width:' + p.progress + '%;"></div></div><span style="font-size:12px;font-weight:600;">' + p.progress + '%</span></div></td>' +
+                    '<td>' + pt.length + '</td>' +
+                    '<td style="color:#16a34a;font-weight:600;">' + pc + '</td>' +
+                    '<td style="color:#dc2626;font-weight:600;">' + po + '</td>' +
+                    '<td>' + UI.getStatusBadge(p.status) + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            var depts = {};
+            tasks.forEach(function(t) {
+                var name = t.departmentName || 'Без отдела';
+                if (!depts[name]) depts[name] = { total: 0, completed: 0 };
+                depts[name].total++;
+                if (t.status === 'Выполнено') depts[name].completed++;
+            });
+            document.getElementById('deptLoad').innerHTML = Object.keys(depts).map(function(dept) {
+                var d = depts[dept];
+                var pct = d.total > 0 ? Math.round(d.completed / d.total * 100) : 0;
+                return '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:13px;font-weight:500;">' + dept + '</span><span style="font-size:13px;font-weight:600;">' + d.completed + '/' + d.total + ' (' + pct + '%)</span></div><div style="background:#e5e7eb;border-radius:4px;height:6px;"><div style="background:#0a1628;height:6px;border-radius:4px;width:' + pct + '%;"></div></div></div>';
+            }).join('');
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            var csv = 'Шифр;Проект;Прогресс;Задач;Выполнено;Просрочено;Статус\n';
+            projects.forEach(function(p) {
+                var pt = tasks.filter(function(t) { return t.projectId === p.id; });
+                csv += p.code + ';' + p.title + ';' + p.progress + '%;' + pt.length + ';' + pt.filter(function(t){return t.status==='Выполнено';}).length + ';' + pt.filter(function(t){return t.status==='Просрочено';}).length + ';' + p.status + '\n';
+            });
+            var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'Отчет_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+        });
+    </script>
+</body>
+</html>
